@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Thesis
@@ -7,77 +5,78 @@ namespace Thesis
     public class PlayerController : MonoBehaviour
     {
         [Header("Private Variables")]
-        [SerializeField] private Camera main_Camera;
+        [SerializeField] private GameObject main_Camera;
         [SerializeField] private Rigidbody player_RigidBody;
         [SerializeField] private Animator player_Animator;
         [SerializeField] private Quaternion player_CurrentRotation;
-        [SerializeField] private Vector3 inputx;
-        [SerializeField] private Vector3 inputz;
+        [SerializeField] private Vector3 moveDirection;
         [SerializeField] private float velocity;
         [SerializeField] private float xAxis;
         [SerializeField] private float yAxis;
-        [SerializeField] private bool player_Jumping;
 
 
-        [Header("Public  Variables")]
-        public float mouse_Sensitivity;
-        public float player_MoveSpeed;
-        public float player_JumpForce;
+        [Header("Public Variables")]
+        public float mouse_Sensitivity = 2f;
+        public float player_MoveSpeed = 5f;
+        public float player_JumpForce = 5f;
+        public float rotateSpeed = 10f;
 
         private void Awake()
         {
-            main_Camera = Camera.main;
             player_RigidBody = GetComponent<Rigidbody>();
             player_Animator = GetComponent<Animator>();
         }
 
         private void Start()
         {
-            player_CurrentRotation = gameObject.transform.rotation;
-            player_Jumping = false;
+            player_CurrentRotation = transform.rotation;
         }
+
         private void FixedUpdate()
         {
-            inputx = Input.GetAxis("Horizontal") * transform.right;
-            inputz = Input.GetAxis("Vertical") * transform.forward;
-            xAxis = Input.GetAxisRaw("Mouse X") * mouse_Sensitivity;
-            yAxis -= Input.GetAxisRaw("Mouse Y") * mouse_Sensitivity;
-
-            player_CurrentRotation.y += xAxis;
+            // Camera rotation input
+            xAxis = Input.GetAxis("Mouse X") * mouse_Sensitivity;
+            yAxis -= Input.GetAxis("Mouse Y") * mouse_Sensitivity;
             yAxis = Mathf.Clamp(yAxis, -20, 20);
 
-            Vector3 movement = (inputx+inputz) * player_MoveSpeed;
-            Vector3 FinalVelocity = new Vector3(movement.x, player_RigidBody.velocity.y, movement.z);
-            transform.rotation = Quaternion.Euler(0, player_CurrentRotation.y, 0);
-            main_Camera.transform.localEulerAngles = new Vector3(yAxis, 0, 0);
+            // Rotate camera horizontally with player
+            player_CurrentRotation *= Quaternion.Euler(0, xAxis, 0);
+            main_Camera.transform.rotation = Quaternion.Euler(yAxis, player_CurrentRotation.eulerAngles.y, 0);
+
+            // Get movement input relative to camera
+            Vector3 camForward = main_Camera.transform.forward;
+            Vector3 camRight = main_Camera.transform.right;
+
+            camForward.y = 0f;
+            camRight.y = 0f;
+            camForward.Normalize();
+            camRight.Normalize();
+
+            float inputX = Input.GetAxis("Horizontal");
+            float inputZ = Input.GetAxis("Vertical");
+
+            moveDirection = (camForward * inputZ + camRight * inputX).normalized;
+
+            // Apply movement
+            Vector3 FinalVelocity = moveDirection * player_MoveSpeed;
+            FinalVelocity.y = player_RigidBody.velocity.y;
             player_RigidBody.velocity = FinalVelocity;
 
-
-            velocity = movement.magnitude;
-
-
-            if (Input.GetKeyDown(KeyCode.Space) && isGrounded() && !player_Jumping)
+            // Rotate player towards movement direction (if moving)
+            if (moveDirection != Vector3.zero)
             {
-                player_RigidBody.AddForce(Vector3.up * player_JumpForce, ForceMode.Impulse);
-                player_Jumping = true;
+                Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotateSpeed * Time.deltaTime);
             }
-            if (isGrounded())
+
+            // Animation velocity
+            velocity = new Vector2(inputX, inputZ).magnitude;
+            if (player_Animator)
             {
-                player_Jumping = false;
+                player_Animator.SetFloat("xVelocity", velocity); // optional if you want
             }
-            player_Animator.SetFloat("xVelocity", velocity);
         }
 
-
-
-        private bool isGrounded()
-        {
-            RaycastHit hit;
-            if (Physics.Raycast(transform.position, Vector3.down, out hit, 1.1f))
-            {
-                return true;
-            }
-            return false;
-        }
     }
+
 }
